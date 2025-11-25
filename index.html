@@ -240,6 +240,93 @@
             100% { transform: rotate(360deg); }
         }
 
+        .login-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-modal.active {
+            display: flex;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .login-box h2 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .login-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .login-buttons button {
+            flex: 1;
+        }
+
+        .admin-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .logout-button {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            cursor: pointer;
+            z-index: 1000;
+            display: none;
+        }
+
+        .logout-button.visible {
+            display: block;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 25px;
@@ -269,6 +356,22 @@
 </head>
 <body>
     <div class="mode-indicator" id="modeIndicator">🔄 Loading...</div>
+    <button class="logout-button" id="logoutButton" onclick="logout()">🔓 Logout</button>
+
+    <!-- Login Modal -->
+    <div class="login-modal" id="loginModal">
+        <div class="login-box">
+            <h2>🔐 Admin Login</h2>
+            <p style="color: #666; margin-bottom: 20px; font-size: 0.9em;">Enter admin credentials to access reset function</p>
+            <input type="text" id="adminUsername" placeholder="Username" autocomplete="username">
+            <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password">
+            <div id="loginError" style="color: #dc3545; margin-top: 10px; font-size: 0.9em; display: none;"></div>
+            <div class="login-buttons">
+                <button class="button secondary" onclick="closeLogin()">Cancel</button>
+                <button class="button" onclick="attemptLogin()">Login</button>
+            </div>
+        </div>
+    </div>
 
     <div class="container" id="mainContainer">
         <h1>🔍 QR Code Counter</h1>
@@ -296,6 +399,11 @@
         let currentMode = 'dashboard';
         let firebaseInitialized = false;
         let connectionStatus = 'connecting';
+        let isAdminLoggedIn = false;
+
+        // Admin credentials (Change these to your desired credentials)
+        const ADMIN_USERNAME = 'admin';
+        const ADMIN_PASSWORD = 'pansol2024';
 
         // Initialize Firebase
         function initFirebase() {
@@ -501,8 +609,11 @@
                 ? 'Live tracking with Firebase' 
                 : 'Connecting to Firebase...';
             
+            const adminBadge = isAdminLoggedIn ? '<span class="admin-badge">👑 ADMIN</span>' : '';
+            const resetButtonText = isAdminLoggedIn ? '🔄 Reset Counter' : '🔒 Reset Counter (Login Required)';
+            
             container.innerHTML = `
-                <h1>🔍 QR Code Counter</h1>
+                <h1>🔍 QR Code Counter${adminBadge}</h1>
                 <p class="subtitle"><span class="status"></span>${statusText}</p>
 
                 <div class="stats">
@@ -518,7 +629,7 @@
 
                 <button class="button" onclick="testScan()">🧪 Test Scan (opens tracking URL)</button>
                 <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
-                <button class="button" onclick="resetCount()">🔄 Reset Counter</button>
+                <button class="button" onclick="resetCount()">${resetButtonText}</button>
                 <button class="button secondary" onclick="showBigScreen()">📺 Big Screen Mode</button>
 
                 <div class="info">
@@ -562,8 +673,88 @@
             updateConnectionStatus();
         }
 
-        // Reset counter
+        // Admin Login Functions
+        function openLogin() {
+            const modal = document.getElementById('loginModal');
+            modal.classList.add('active');
+            document.getElementById('adminUsername').value = '';
+            document.getElementById('adminPassword').value = '';
+            document.getElementById('loginError').style.display = 'none';
+        }
+
+        function closeLogin() {
+            const modal = document.getElementById('loginModal');
+            modal.classList.remove('active');
+        }
+
+        function attemptLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                isAdminLoggedIn = true;
+                console.log('✅ Admin logged in successfully');
+                closeLogin();
+                
+                // Show logout button
+                document.getElementById('logoutButton').classList.add('visible');
+                
+                // Show success message
+                alert('✅ Admin login successful!');
+                
+                // Refresh dashboard to show admin badge
+                showDashboard();
+            } else {
+                errorDiv.textContent = '❌ Invalid username or password';
+                errorDiv.style.display = 'block';
+                console.log('❌ Login failed');
+            }
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                isAdminLoggedIn = false;
+                console.log('🔓 Admin logged out');
+                
+                // Hide logout button
+                document.getElementById('logoutButton').classList.remove('visible');
+                
+                // Refresh dashboard
+                showDashboard();
+            }
+        }
+
+        // Handle Enter key in login form
+        document.addEventListener('DOMContentLoaded', () => {
+            const passwordInput = document.getElementById('adminPassword');
+            const usernameInput = document.getElementById('adminUsername');
+            
+            if (passwordInput) {
+                passwordInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        attemptLogin();
+                    }
+                });
+            }
+            
+            if (usernameInput) {
+                usernameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        attemptLogin();
+                    }
+                });
+            }
+        });
+
+        // Reset counter (Admin only)
         async function resetCount() {
+            if (!isAdminLoggedIn) {
+                openLogin();
+                alert('⚠️ Please login as admin to reset the counter');
+                return;
+            }
+
             if (confirm('Are you sure you want to reset the counter to 0?')) {
                 try {
                     console.log('🔄 Resetting counter...');
