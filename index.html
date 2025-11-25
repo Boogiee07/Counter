@@ -167,6 +167,16 @@
             color: #0066cc;
         }
 
+        .error-box {
+            background: #ffe6e6;
+            border: 2px solid #ff4444;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #cc0000;
+        }
+
         .status {
             display: inline-block;
             width: 10px;
@@ -175,6 +185,10 @@
             background: #28a745;
             margin-right: 5px;
             animation: blink 2s ease-in-out infinite;
+        }
+
+        .status.error {
+            background: #dc3545;
         }
 
         @keyframes blink {
@@ -263,6 +277,7 @@
 
     <script>
         console.log('Script starting...');
+        console.log('Current URL:', window.location.href);
 
         // Firebase Configuration
         const firebaseConfig = {
@@ -280,61 +295,126 @@
         let scanCount = 0;
         let currentMode = 'dashboard';
         let firebaseInitialized = false;
+        let connectionStatus = 'connecting';
 
         // Initialize Firebase
-        try {
-            console.log('Initializing Firebase...');
-            firebase.initializeApp(firebaseConfig);
-            database = firebase.database();
-            scanCountRef = database.ref('qr_scan_count');
-            firebaseInitialized = true;
-            console.log('Firebase initialized successfully');
-        } catch (error) {
-            console.error('Firebase initialization error:', error);
+        function initFirebase() {
+            try {
+                console.log('Initializing Firebase...');
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                scanCountRef = database.ref('qr_scan_count');
+                
+                // Monitor connection status
+                const connectedRef = database.ref('.info/connected');
+                connectedRef.on('value', (snap) => {
+                    if (snap.val() === true) {
+                        console.log('✅ Connected to Firebase');
+                        connectionStatus = 'connected';
+                        firebaseInitialized = true;
+                        updateConnectionStatus();
+                    } else {
+                        console.log('❌ Disconnected from Firebase');
+                        connectionStatus = 'disconnected';
+                        updateConnectionStatus();
+                    }
+                });
+
+                // Listen for real-time updates
+                scanCountRef.on('value', (snapshot) => {
+                    scanCount = snapshot.val() || 0;
+                    console.log('📊 Counter updated from Firebase:', scanCount);
+                    updateDisplay();
+                }, (error) => {
+                    console.error('❌ Firebase read error:', error);
+                    showError('Cannot read from database. Check Firebase rules.');
+                });
+
+                console.log('✅ Firebase initialized successfully');
+                
+            } catch (error) {
+                console.error('❌ Firebase initialization error:', error);
+                connectionStatus = 'error';
+                showError('Failed to initialize Firebase: ' + error.message);
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus() {
+            const statusElements = document.querySelectorAll('.status');
+            statusElements.forEach(el => {
+                if (connectionStatus === 'connected') {
+                    el.classList.remove('error');
+                    el.style.background = '#28a745';
+                } else {
+                    el.classList.add('error');
+                    el.style.background = '#dc3545';
+                }
+            });
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorBox = document.createElement('div');
+            errorBox.className = 'error-box';
+            errorBox.innerHTML = `
+                <strong>⚠️ Error:</strong> ${message}
+                <br><br>
+                <strong>To fix:</strong> Go to Firebase Console → Realtime Database → Rules and set:
+                <pre style="background: white; padding: 10px; border-radius: 5px; margin-top: 10px; text-align: left;">
+{
+  "rules": {
+    "qr_scan_count": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}</pre>
+            `;
+            
+            const container = document.getElementById('mainContainer');
+            const existingError = container.querySelector('.error-box');
+            if (existingError) {
+                existingError.remove();
+            }
+            container.appendChild(errorBox);
         }
 
         // Detect mode from URL
         function detectMode() {
             const urlParams = new URLSearchParams(window.location.search);
-            const mode = urlParams.get('track');
+            const trackParam = urlParams.get('track');
+            const modeParam = urlParams.get('mode');
             
-            console.log('URL params:', window.location.search);
-            console.log('Track parameter:', mode);
+            console.log('📍 URL params:', window.location.search);
+            console.log('📍 Track parameter:', trackParam);
+            console.log('📍 Mode parameter:', modeParam);
             
-            if (mode === '1') {
-                console.log('TRACKING MODE - Incrementing and redirecting...');
+            if (trackParam === '1') {
+                console.log('🎯 TRACKING MODE - Will increment and redirect');
                 currentMode = 'tracking';
                 incrementAndRedirect();
-            } else if (urlParams.get('mode') === 'bigscreen') {
+            } else if (modeParam === 'bigscreen') {
+                console.log('📺 BIG SCREEN MODE');
                 currentMode = 'bigscreen';
                 showBigScreen();
             } else {
+                console.log('📊 DASHBOARD MODE');
                 currentMode = 'dashboard';
                 showDashboard();
             }
         }
 
-        // Listen for real-time updates
-        if (firebaseInitialized) {
-            scanCountRef.on('value', (snapshot) => {
-                scanCount = snapshot.val() || 0;
-                console.log('Counter updated from Firebase:', scanCount);
-                updateDisplay();
-            }, (error) => {
-                console.error('Firebase read error:', error);
-            });
-        }
-
         // Update display
         function updateDisplay() {
-            const countElement = document.getElementById('scanCount');
-            if (countElement) {
+            const countElements = document.querySelectorAll('.count');
+            countElements.forEach(countElement => {
                 countElement.textContent = scanCount;
                 countElement.style.animation = 'none';
                 setTimeout(() => {
                     countElement.style.animation = 'countPulse 0.5s ease-out';
                 }, 10);
-            }
+            });
         }
 
         // Increment counter and redirect to Pansol
@@ -351,32 +431,64 @@
                 </div>
             `;
 
-            console.log('Incrementing counter...');
+            console.log('🔢 Attempting to increment counter...');
+            
+            if (!firebaseInitialized) {
+                console.log('⏳ Waiting for Firebase to initialize...');
+                // Wait up to 3 seconds for Firebase to initialize
+                let waited = 0;
+                while (!firebaseInitialized && waited < 3000) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    waited += 100;
+                }
+            }
+
             try {
+                console.log('🔄 Running transaction...');
                 const result = await scanCountRef.transaction((currentCount) => {
-                    console.log('Current count:', currentCount);
-                    return (currentCount || 0) + 1;
+                    console.log('📊 Current count in transaction:', currentCount);
+                    const newCount = (currentCount || 0) + 1;
+                    console.log('📊 New count will be:', newCount);
+                    return newCount;
                 });
-                console.log('Counter incremented! New value:', result.snapshot.val());
+                
+                if (result.committed) {
+                    console.log('✅ Counter incremented successfully! New value:', result.snapshot.val());
+                } else {
+                    console.log('⚠️ Transaction not committed');
+                }
                 
                 // Redirect after 1.5 seconds
+                console.log('⏳ Waiting 1.5s before redirect...');
                 setTimeout(() => {
-                    console.log('Redirecting to pansol.netlify.app');
+                    console.log('🚀 Redirecting to pansol.netlify.app');
                     window.location.href = 'https://pansol.netlify.app';
                 }, 1500);
                 
             } catch (error) {
-                console.error('Error incrementing counter:', error);
-                // Redirect anyway even if counting fails
+                console.error('❌ Error incrementing counter:', error);
+                console.error('Error details:', error.message, error.code);
+                
+                // Show error but still redirect
+                container.innerHTML = `
+                    <h1>⚠️ Notice</h1>
+                    <div class="redirect-message" style="background: #ffe6e6; border-color: #ff4444;">
+                        <h2>Could not record visit</h2>
+                        <p style="color: #cc0000;">Error: ${error.message}</p>
+                        <div class="spinner"></div>
+                        <p>Redirecting to Pansol website anyway...</p>
+                    </div>
+                `;
+                
                 setTimeout(() => {
                     window.location.href = 'https://pansol.netlify.app';
-                }, 1500);
+                }, 2000);
             }
         }
 
         // Show Dashboard
         function showDashboard() {
-            console.log('Showing dashboard');
+            console.log('📊 Showing dashboard');
             document.getElementById('modeIndicator').textContent = '📊 Dashboard Mode';
             const container = document.getElementById('mainContainer');
             container.className = 'container';
@@ -385,9 +497,13 @@
             const currentUrl = window.location.href.split('?')[0];
             const trackingUrl = currentUrl + '?track=1';
             
+            const statusText = connectionStatus === 'connected' 
+                ? 'Live tracking with Firebase' 
+                : 'Connecting to Firebase...';
+            
             container.innerHTML = `
                 <h1>🔍 QR Code Counter</h1>
-                <p class="subtitle"><span class="status"></span>Live tracking with Firebase</p>
+                <p class="subtitle"><span class="status"></span>${statusText}</p>
 
                 <div class="stats">
                     <h2>Total Scans</h2>
@@ -398,9 +514,9 @@
                     <div id="qrcode"></div>
                 </div>
 
-                <div class="url-display">QR Code → This Page → Pansol.netlify.app</div>
+                <div class="url-display">Tracking URL: ${trackingUrl}</div>
 
-                <button class="button" onclick="testScan()">🧪 Test Scan</button>
+                <button class="button" onclick="testScan()">🧪 Test Scan (opens tracking URL)</button>
                 <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
                 <button class="button" onclick="resetCount()">🔄 Reset Counter</button>
                 <button class="button secondary" onclick="showBigScreen()">📺 Big Screen Mode</button>
@@ -409,26 +525,31 @@
                     💡 <strong>How it works:</strong> 
                     <ol style="text-align: left; margin: 10px 20px;">
                         <li>User scans QR code</li>
-                        <li>Counter increments automatically</li>
-                        <li>User is redirected to pansol.netlify.app</li>
+                        <li>Counter increments automatically (+1)</li>
+                        <li>User redirects to pansol.netlify.app</li>
                     </ol>
+                    <p style="margin-top: 10px; font-size: 0.85em;">
+                        Current tracking URL: <code>${trackingUrl}</code>
+                    </p>
                 </div>
             `;
             
+            updateConnectionStatus();
             generateQR(trackingUrl);
         }
 
         // Test scan function (simulates scanning the QR code)
         function testScan() {
-            console.log('TEST SCAN - Opening tracking URL');
+            console.log('🧪 TEST SCAN - Opening tracking URL');
             const currentUrl = window.location.href.split('?')[0];
             const trackingUrl = currentUrl + '?track=1';
-            window.location.href = trackingUrl;
+            console.log('🧪 Opening:', trackingUrl);
+            window.open(trackingUrl, '_blank');
         }
 
         // Show Big Screen Mode
         function showBigScreen() {
-            console.log('Showing big screen');
+            console.log('📺 Showing big screen');
             document.getElementById('modeIndicator').textContent = '📺 Big Screen Mode';
             const container = document.getElementById('mainContainer');
             container.className = 'container big-screen';
@@ -438,18 +559,20 @@
                 <p class="subtitle"><span class="status"></span>Real-time Counter</p>
                 <button class="button" onclick="showDashboard()" style="margin-top: 40px;">← Back to Dashboard</button>
             `;
+            updateConnectionStatus();
         }
 
         // Reset counter
         async function resetCount() {
             if (confirm('Are you sure you want to reset the counter to 0?')) {
                 try {
+                    console.log('🔄 Resetting counter...');
                     await scanCountRef.set(0);
-                    console.log('Counter reset to 0');
-                    alert('Counter reset successfully!');
+                    console.log('✅ Counter reset to 0');
+                    alert('✅ Counter reset successfully!');
                 } catch (error) {
-                    console.error('Error resetting count:', error);
-                    alert('Error resetting counter: ' + error.message);
+                    console.error('❌ Error resetting count:', error);
+                    alert('❌ Error resetting counter: ' + error.message);
                 }
             }
         }
@@ -460,34 +583,49 @@
             if (!qrElement) return;
             
             qrElement.innerHTML = '';
-            console.log('Generating QR code for:', url);
+            console.log('🎨 Generating QR code for:', url);
             
-            new QRCode(qrElement, {
-                text: url,
-                width: 200,
-                height: 200,
-                colorDark: '#667eea',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.H
-            });
+            try {
+                new QRCode(qrElement, {
+                    text: url,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#667eea',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                console.log('✅ QR code generated successfully');
+            } catch (error) {
+                console.error('❌ Error generating QR code:', error);
+            }
         }
 
         // Download QR Code
         function downloadQR() {
             const canvas = document.querySelector('#qrcode canvas');
             if (canvas) {
-                const url = canvas.toDataURL('image/png');
-                const link = document.createElement('a');
-                link.download = 'pansol-qr-code.png';
-                link.href = url;
-                link.click();
+                try {
+                    const url = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.download = 'pansol-qr-code.png';
+                    link.href = url;
+                    link.click();
+                    console.log('✅ QR code downloaded');
+                } catch (error) {
+                    console.error('❌ Error downloading QR code:', error);
+                    alert('Error downloading QR code: ' + error.message);
+                }
             } else {
                 alert('QR code not found. Please refresh the page.');
             }
         }
 
-        // Initialize
+        // Initialize everything
+        console.log('🚀 Starting initialization...');
+        initFirebase();
         detectMode();
+        
+        console.log('✅ Script initialization complete');
     </script>
 </body>
 </html>
