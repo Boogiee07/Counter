@@ -416,12 +416,14 @@
                 
                 <div class="welcome-message">
                     <p>Thank you for scanning our QR code! Your visit has been tracked.</p>
-                    <p>Replace this with your actual Pansol website content.</p>
+                    <p>This is your Pansol landing page. Customize this content to show your visitors what you want them to see!</p>
+                    <p><strong>You can add:</strong> Links to your website, contact information, special offers, or any other content.</p>
                 </div>
 
-                <div class="badge">✓ Scan #${scanCount} Recorded</div>
+                <div class="badge">✓ Visit Recorded</div>
                 
-                <button class="button" onclick="showDashboard()" style="margin-top: 30px;">View Dashboard</button>
+                <button class="button" onclick="window.location.href='http://pansol.netlify.app'" style="margin-top: 30px;">🌐 Visit Pansol Website</button>
+                <button class="button secondary" onclick="showDashboard()" style="margin-top: 10px;">📊 View Dashboard</button>
             `;
         }
 
@@ -435,6 +437,7 @@
             if (confirm('Are you sure you want to reset the counter?')) {
                 try {
                     await scanCountRef.set(0);
+                    alert('Counter reset successfully!');
                 } catch (error) {
                     console.error('Error resetting count:', error);
                     alert('Error resetting counter. Please try again.');
@@ -446,7 +449,10 @@
         function displayCurrentURL() {
             const urlDisplay = document.getElementById('urlDisplay');
             if (urlDisplay) {
-                urlDisplay.textContent = 'http://pansol.netlify.app';
+                // Get the current page URL and add the destination parameter
+                const baseUrl = window.location.origin + window.location.pathname;
+                const trackingUrl = baseUrl + '?destination=true';
+                urlDisplay.textContent = trackingUrl;
             }
         }
 
@@ -457,8 +463,10 @@
             
             qrElement.innerHTML = '';
             
-            // QR code points directly to pansol.netlify.app
-            const trackingURL = 'http://pansol.netlify.app';
+            // QR code points to THIS page with ?destination=true parameter
+            // This ensures counting happens before redirect
+            const baseUrl = window.location.origin + window.location.pathname;
+            const trackingURL = baseUrl + '?destination=true';
             
             new QRCode(qrElement, {
                 text: trackingURL,
