@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner Counter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-database-compat.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Big Screen Counter Mode */
+        .big-screen {
+            max-width: 100%;
+            width: 100%;
+            height: 100vh;
+            border-radius: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px;
+        }
+
+        .big-screen h1 {
+            font-size: 4em;
+            margin-bottom: 40px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .big-screen .count {
+            font-size: 15em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: countPulse 0.5s ease-out;
+        }
+
+        .big-screen .subtitle {
+            font-size: 2em;
+            margin-top: 40px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes countPulse {
+            0% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .qr-container {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+            display: inline-block;
+        }
+
+        #qrcode {
+            display: inline-block;
+        }
+
+        .stats {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        .stats h2 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .count {
+            font-size: 3.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .url-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            word-break: break-all;
+            font-family: monospace;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 5px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.secondary {
+            background: #6c757d;
+        }
+
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #0066cc;
+        }
+
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            margin-right: 5px;
+            animation: blink 2s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .count {
+                font-size: 2.5em;
+            }
+
+            .big-screen h1 {
+                font-size: 2.5em;
+            }
+
+            .big-screen .count {
+                font-size: 8em;
+            }
+
+            .big-screen .subtitle {
+                font-size: 1.2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <h1>🔍 QR Code Counter</h1>
+        <p class="subtitle"><span class="status"></span>Live tracking with Firebase</p>
+
+        <div class="stats">
+            <h2>Total Scans</h2>
+            <div class="count" id="scanCount">0</div>
+        </div>
+
+        <div class="qr-container">
+            <div id="qrcode"></div>
+        </div>
+
+        <div class="url-display">
+            http://pansol.netlify.app
+        </div>
+
+        <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
+        <button class="button" onclick="resetCount()">🔄 Reset Counter</button>
+        <button class="button secondary" onclick="toggleBigScreen()">📺 Big Screen Mode</button>
+
+        <div class="info">
+            💡 Scan this QR code to increment the counter. Real-time sync with Firebase!
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAPDGLjg0mftwgRYi8oMyfSzHw4L9AgZl0",
+            authDomain: "user-61ed5.firebaseapp.com",
+            databaseURL: "https://user-61ed5-default-rtdb.firebaseio.com",
+            projectId: "user-61ed5",
+            storageBucket: "user-61ed5.firebasestorage.app",
+            messagingSenderId: "377915361691",
+            appId: "1:377915361691:web:928b2d1704aa041a26b93e"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const scanCountRef = database.ref('qr_scan_count');
+
+        const TARGET_URL = 'http://pansol.netlify.app';
+        let scanCount = 0;
+        let isBigScreenMode = false;
+
+        // Listen for real-time updates
+        scanCountRef.on('value', (snapshot) => {
+            scanCount = snapshot.val() || 0;
+            updateDisplay();
+        });
+
+        // Increment scan count
+        async function incrementCount() {
+            try {
+                await scanCountRef.transaction((currentCount) => {
+                    return (currentCount || 0) + 1;
+                });
+                // Redirect to the target URL
+                window.location.href = TARGET_URL;
+            } catch (error) {
+                console.error('Error incrementing count:', error);
+            }
+        }
+
+        // Update display
+        function updateDisplay() {
+            const countElement = document.getElementById('scanCount');
+            countElement.textContent = scanCount;
+            // Trigger animation
+            countElement.style.animation = 'none';
+            setTimeout(() => {
+                countElement.style.animation = 'countPulse 0.5s ease-out';
+            }, 10);
+        }
+
+        // Reset counter
+        async function resetCount() {
+            if (confirm('Are you sure you want to reset the counter?')) {
+                try {
+                    await scanCountRef.set(0);
+                } catch (error) {
+                    console.error('Error resetting count:', error);
+                    alert('Error resetting counter. Please try again.');
+                }
+            }
+        }
+
+        // Toggle Big Screen Mode
+        function toggleBigScreen() {
+            isBigScreenMode = !isBigScreenMode;
+            const container = document.getElementById('mainContainer');
+            
+            if (isBigScreenMode) {
+                container.innerHTML = `
+                    <h1>🔍 Total Scans</h1>
+                    <div class="count" id="scanCount">${scanCount}</div>
+                    <p class="subtitle"><span class="status"></span>Real-time Counter</p>
+                    <button class="button" onclick="toggleBigScreen()" style="margin-top: 40px;">← Back to Dashboard</button>
+                `;
+                container.classList.add('big-screen');
+            } else {
+                location.reload();
+            }
+        }
+
+        // Generate QR Code with tracking
+        function generateQR() {
+            const qrElement = document.getElementById('qrcode');
+            qrElement.innerHTML = '';
+            
+            // Create tracking URL - when scanned, it will increment the counter
+            const trackingURL = window.location.href.split('?')[0] + '?scan=true';
+            
+            new QRCode(qrElement, {
+                text: trackingURL,
+                width: 200,
+                height: 200,
+                colorDark: '#667eea',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        // Download QR Code
+        function downloadQR() {
+            const canvas = document.querySelector('#qrcode canvas');
+            if (canvas) {
+                const url = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = 'pansol-qr-code.png';
+                link.href = url;
+                link.click();
+            }
+        }
+
+        // Check if this is a scan
+        async function checkForScan() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('scan') === 'true') {
+                await incrementCount();
+            }
+        }
+
+        // Initialize
+        async function init() {
+            generateQR();
+            await checkForScan();
+        }
+
+        init();
+    </script>
+</body>
+</html>
