@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Code Scanner Counter - Pansol</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-database-compat.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
         * {
             margin: 0;
@@ -34,7 +34,6 @@
             text-align: center;
         }
 
-        /* Big Screen Counter Mode */
         .big-screen {
             max-width: 100%;
             width: 100%;
@@ -66,43 +65,6 @@
         .big-screen .subtitle {
             font-size: 2em;
             margin-top: 40px;
-        }
-
-        /* Destination Page Mode */
-        .destination-page {
-            max-width: 800px;
-        }
-
-        .destination-page h1 {
-            font-size: 3em;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .welcome-message {
-            background: #f8f9fa;
-            padding: 30px;
-            border-radius: 15px;
-            margin: 30px 0;
-        }
-
-        .welcome-message p {
-            font-size: 1.2em;
-            color: #666;
-            line-height: 1.8;
-            margin-bottom: 15px;
-        }
-
-        .badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-size: 0.9em;
-            margin-top: 20px;
         }
 
         @keyframes pulse {
@@ -168,6 +130,7 @@
             font-family: monospace;
             color: #667eea;
             font-weight: bold;
+            font-size: 0.85em;
         }
 
         .button {
@@ -230,6 +193,37 @@
             color: #667eea;
             font-weight: bold;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .redirect-message {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            font-size: 1.1em;
+            color: #856404;
+        }
+
+        .redirect-message h2 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         @media (max-width: 600px) {
@@ -256,47 +250,20 @@
             .big-screen .subtitle {
                 font-size: 1.2em;
             }
-
-            .destination-page h1 {
-                font-size: 2em;
-            }
-
-            .welcome-message p {
-                font-size: 1em;
-            }
         }
     </style>
 </head>
 <body>
-    <div class="mode-indicator" id="modeIndicator">📊 Dashboard Mode</div>
+    <div class="mode-indicator" id="modeIndicator">🔄 Loading...</div>
 
     <div class="container" id="mainContainer">
         <h1>🔍 QR Code Counter</h1>
-        <p class="subtitle"><span class="status"></span>Live tracking with Firebase</p>
-
-        <div class="stats">
-            <h2>Total Scans</h2>
-            <div class="count" id="scanCount">0</div>
-        </div>
-
-        <div class="qr-container">
-            <div id="qrcode"></div>
-        </div>
-
-        <div class="url-display" id="urlDisplay">
-            Loading...
-        </div>
-
-        <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
-        <button class="button" onclick="resetCount()">🔄 Reset Counter</button>
-        <button class="button secondary" onclick="toggleBigScreen()">📺 Big Screen Mode</button>
-
-        <div class="info">
-            💡 <strong>How it works:</strong> Share the QR code. When scanned, users go directly to your destination page and the counter updates in real-time!
-        </div>
+        <p class="subtitle"><span class="status"></span>Connecting to Firebase...</p>
     </div>
 
     <script>
+        console.log('Script starting...');
+
         // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyAPDGLjg0mftwgRYi8oMyfSzHw4L9AgZl0",
@@ -308,23 +275,37 @@
             appId: "1:377915361691:web:928b2d1704aa041a26b93e"
         };
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        const scanCountRef = database.ref('qr_scan_count');
-
+        let database;
+        let scanCountRef;
         let scanCount = 0;
-        let isBigScreenMode = false;
-        let currentMode = 'dashboard'; // dashboard, bigscreen, or destination
+        let currentMode = 'dashboard';
+        let firebaseInitialized = false;
 
-        // Detect which mode to show based on URL parameters
+        // Initialize Firebase
+        try {
+            console.log('Initializing Firebase...');
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+            scanCountRef = database.ref('qr_scan_count');
+            firebaseInitialized = true;
+            console.log('Firebase initialized successfully');
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
+        }
+
+        // Detect mode from URL
         function detectMode() {
             const urlParams = new URLSearchParams(window.location.search);
+            const mode = urlParams.get('track');
             
-            if (urlParams.get('destination') === 'true') {
-                currentMode = 'destination';
-                showDestinationPage();
-            } else if (urlParams.get('bigscreen') === 'true') {
+            console.log('URL params:', window.location.search);
+            console.log('Track parameter:', mode);
+            
+            if (mode === '1') {
+                console.log('TRACKING MODE - Incrementing and redirecting...');
+                currentMode = 'tracking';
+                incrementAndRedirect();
+            } else if (urlParams.get('mode') === 'bigscreen') {
                 currentMode = 'bigscreen';
                 showBigScreen();
             } else {
@@ -334,10 +315,15 @@
         }
 
         // Listen for real-time updates
-        scanCountRef.on('value', (snapshot) => {
-            scanCount = snapshot.val() || 0;
-            updateDisplay();
-        });
+        if (firebaseInitialized) {
+            scanCountRef.on('value', (snapshot) => {
+                scanCount = snapshot.val() || 0;
+                console.log('Counter updated from Firebase:', scanCount);
+                updateDisplay();
+            }, (error) => {
+                console.error('Firebase read error:', error);
+            });
+        }
 
         // Update display
         function updateDisplay() {
@@ -351,11 +337,54 @@
             }
         }
 
-        // Show Dashboard (default mode)
+        // Increment counter and redirect to Pansol
+        async function incrementAndRedirect() {
+            document.getElementById('modeIndicator').textContent = '📊 Tracking Visit...';
+            const container = document.getElementById('mainContainer');
+            container.className = 'container';
+            container.innerHTML = `
+                <h1>🎉 Thank You!</h1>
+                <div class="redirect-message">
+                    <h2>Recording your visit...</h2>
+                    <div class="spinner"></div>
+                    <p>Redirecting to Pansol website...</p>
+                </div>
+            `;
+
+            console.log('Incrementing counter...');
+            try {
+                const result = await scanCountRef.transaction((currentCount) => {
+                    console.log('Current count:', currentCount);
+                    return (currentCount || 0) + 1;
+                });
+                console.log('Counter incremented! New value:', result.snapshot.val());
+                
+                // Redirect after 1.5 seconds
+                setTimeout(() => {
+                    console.log('Redirecting to pansol.netlify.app');
+                    window.location.href = 'https://pansol.netlify.app';
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error incrementing counter:', error);
+                // Redirect anyway even if counting fails
+                setTimeout(() => {
+                    window.location.href = 'https://pansol.netlify.app';
+                }, 1500);
+            }
+        }
+
+        // Show Dashboard
         function showDashboard() {
+            console.log('Showing dashboard');
             document.getElementById('modeIndicator').textContent = '📊 Dashboard Mode';
             const container = document.getElementById('mainContainer');
             container.className = 'container';
+            
+            // Get current page URL and add tracking parameter
+            const currentUrl = window.location.href.split('?')[0];
+            const trackingUrl = currentUrl + '?track=1';
+            
             container.innerHTML = `
                 <h1>🔍 QR Code Counter</h1>
                 <p class="subtitle"><span class="status"></span>Live tracking with Firebase</p>
@@ -369,22 +398,37 @@
                     <div id="qrcode"></div>
                 </div>
 
-                <div class="url-display" id="urlDisplay"></div>
+                <div class="url-display">QR Code → This Page → Pansol.netlify.app</div>
 
+                <button class="button" onclick="testScan()">🧪 Test Scan</button>
                 <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
                 <button class="button" onclick="resetCount()">🔄 Reset Counter</button>
                 <button class="button secondary" onclick="showBigScreen()">📺 Big Screen Mode</button>
 
                 <div class="info">
-                    💡 <strong>How it works:</strong> Share the QR code. When scanned, users go directly to your destination page and the counter updates in real-time!
+                    💡 <strong>How it works:</strong> 
+                    <ol style="text-align: left; margin: 10px 20px;">
+                        <li>User scans QR code</li>
+                        <li>Counter increments automatically</li>
+                        <li>User is redirected to pansol.netlify.app</li>
+                    </ol>
                 </div>
             `;
-            generateQR();
-            displayCurrentURL();
+            
+            generateQR(trackingUrl);
+        }
+
+        // Test scan function (simulates scanning the QR code)
+        function testScan() {
+            console.log('TEST SCAN - Opening tracking URL');
+            const currentUrl = window.location.href.split('?')[0];
+            const trackingUrl = currentUrl + '?track=1';
+            window.location.href = trackingUrl;
         }
 
         // Show Big Screen Mode
         function showBigScreen() {
+            console.log('Showing big screen');
             document.getElementById('modeIndicator').textContent = '📺 Big Screen Mode';
             const container = document.getElementById('mainContainer');
             container.className = 'container big-screen';
@@ -396,80 +440,30 @@
             `;
         }
 
-        // Show Destination Page (when QR is scanned)
-        function showDestinationPage() {
-            document.getElementById('modeIndicator').textContent = '✓ Tracked Visit';
-            
-            // Increment the counter in Firebase
-            scanCountRef.transaction((currentCount) => {
-                return (currentCount || 0) + 1;
-            }).then(() => {
-                console.log('Scan tracked successfully!');
-            }).catch((error) => {
-                console.error('Error tracking scan:', error);
-            });
-
-            const container = document.getElementById('mainContainer');
-            container.className = 'container destination-page';
-            container.innerHTML = `
-                <h1>🎉 Welcome to Pansol!</h1>
-                
-                <div class="welcome-message">
-                    <p>Thank you for scanning our QR code! Your visit has been tracked.</p>
-                    <p>This is your Pansol landing page. Customize this content to show your visitors what you want them to see!</p>
-                    <p><strong>You can add:</strong> Links to your website, contact information, special offers, or any other content.</p>
-                </div>
-
-                <div class="badge">✓ Visit Recorded</div>
-                
-                <button class="button" onclick="window.location.href='http://pansol.netlify.app'" style="margin-top: 30px;">🌐 Visit Pansol Website</button>
-                <button class="button secondary" onclick="showDashboard()" style="margin-top: 10px;">📊 View Dashboard</button>
-            `;
-        }
-
-        // Toggle Big Screen Mode
-        function toggleBigScreen() {
-            showBigScreen();
-        }
-
         // Reset counter
         async function resetCount() {
-            if (confirm('Are you sure you want to reset the counter?')) {
+            if (confirm('Are you sure you want to reset the counter to 0?')) {
                 try {
                     await scanCountRef.set(0);
+                    console.log('Counter reset to 0');
                     alert('Counter reset successfully!');
                 } catch (error) {
                     console.error('Error resetting count:', error);
-                    alert('Error resetting counter. Please try again.');
+                    alert('Error resetting counter: ' + error.message);
                 }
             }
         }
 
-        // Display current URL
-        function displayCurrentURL() {
-            const urlDisplay = document.getElementById('urlDisplay');
-            if (urlDisplay) {
-                // Get the current page URL and add the destination parameter
-                const baseUrl = window.location.origin + window.location.pathname;
-                const trackingUrl = baseUrl + '?destination=true';
-                urlDisplay.textContent = trackingUrl;
-            }
-        }
-
         // Generate QR Code
-        function generateQR() {
+        function generateQR(url) {
             const qrElement = document.getElementById('qrcode');
             if (!qrElement) return;
             
             qrElement.innerHTML = '';
-            
-            // QR code points to THIS page with ?destination=true parameter
-            // This ensures counting happens before redirect
-            const baseUrl = window.location.origin + window.location.pathname;
-            const trackingURL = baseUrl + '?destination=true';
+            console.log('Generating QR code for:', url);
             
             new QRCode(qrElement, {
-                text: trackingURL,
+                text: url,
                 width: 200,
                 height: 200,
                 colorDark: '#667eea',
@@ -487,15 +481,13 @@
                 link.download = 'pansol-qr-code.png';
                 link.href = url;
                 link.click();
+            } else {
+                alert('QR code not found. Please refresh the page.');
             }
         }
 
         // Initialize
-        function init() {
-            detectMode();
-        }
-
-        init();
+        detectMode();
     </script>
 </body>
 </html>
