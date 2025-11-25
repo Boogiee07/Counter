@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Scanner Counter</title>
+    <title>QR Code Scanner Counter - Pansol</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-database-compat.min.js"></script>
@@ -66,6 +66,43 @@
         .big-screen .subtitle {
             font-size: 2em;
             margin-top: 40px;
+        }
+
+        /* Destination Page Mode */
+        .destination-page {
+            max-width: 800px;
+        }
+
+        .destination-page h1 {
+            font-size: 3em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .welcome-message {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+        }
+
+        .welcome-message p {
+            font-size: 1.2em;
+            color: #666;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            margin-top: 20px;
         }
 
         @keyframes pulse {
@@ -182,6 +219,19 @@
             50% { opacity: 0.3; }
         }
 
+        .mode-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            color: #667eea;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 25px;
@@ -206,10 +256,20 @@
             .big-screen .subtitle {
                 font-size: 1.2em;
             }
+
+            .destination-page h1 {
+                font-size: 2em;
+            }
+
+            .welcome-message p {
+                font-size: 1em;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="mode-indicator" id="modeIndicator">📊 Dashboard Mode</div>
+
     <div class="container" id="mainContainer">
         <h1>🔍 QR Code Counter</h1>
         <p class="subtitle"><span class="status"></span>Live tracking with Firebase</p>
@@ -223,8 +283,8 @@
             <div id="qrcode"></div>
         </div>
 
-        <div class="url-display">
-            http://pansol.netlify.app
+        <div class="url-display" id="urlDisplay">
+            Loading...
         </div>
 
         <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
@@ -232,7 +292,7 @@
         <button class="button secondary" onclick="toggleBigScreen()">📺 Big Screen Mode</button>
 
         <div class="info">
-            💡 Scan this QR code to increment the counter. Real-time sync with Firebase!
+            💡 <strong>How it works:</strong> Share the QR code. When scanned, users go directly to your destination page and the counter updates in real-time!
         </div>
     </div>
 
@@ -253,9 +313,25 @@
         const database = firebase.database();
         const scanCountRef = database.ref('qr_scan_count');
 
-        const TARGET_URL = 'http://pansol.netlify.app';
         let scanCount = 0;
         let isBigScreenMode = false;
+        let currentMode = 'dashboard'; // dashboard, bigscreen, or destination
+
+        // Detect which mode to show based on URL parameters
+        function detectMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            if (urlParams.get('destination') === 'true') {
+                currentMode = 'destination';
+                showDestinationPage();
+            } else if (urlParams.get('bigscreen') === 'true') {
+                currentMode = 'bigscreen';
+                showBigScreen();
+            } else {
+                currentMode = 'dashboard';
+                showDashboard();
+            }
+        }
 
         // Listen for real-time updates
         scanCountRef.on('value', (snapshot) => {
@@ -263,28 +339,95 @@
             updateDisplay();
         });
 
-        // Increment scan count
-        async function incrementCount() {
-            try {
-                await scanCountRef.transaction((currentCount) => {
-                    return (currentCount || 0) + 1;
-                });
-                // Redirect to the target URL
-                window.location.href = TARGET_URL;
-            } catch (error) {
-                console.error('Error incrementing count:', error);
-            }
-        }
-
         // Update display
         function updateDisplay() {
             const countElement = document.getElementById('scanCount');
-            countElement.textContent = scanCount;
-            // Trigger animation
-            countElement.style.animation = 'none';
-            setTimeout(() => {
-                countElement.style.animation = 'countPulse 0.5s ease-out';
-            }, 10);
+            if (countElement) {
+                countElement.textContent = scanCount;
+                countElement.style.animation = 'none';
+                setTimeout(() => {
+                    countElement.style.animation = 'countPulse 0.5s ease-out';
+                }, 10);
+            }
+        }
+
+        // Show Dashboard (default mode)
+        function showDashboard() {
+            document.getElementById('modeIndicator').textContent = '📊 Dashboard Mode';
+            const container = document.getElementById('mainContainer');
+            container.className = 'container';
+            container.innerHTML = `
+                <h1>🔍 QR Code Counter</h1>
+                <p class="subtitle"><span class="status"></span>Live tracking with Firebase</p>
+
+                <div class="stats">
+                    <h2>Total Scans</h2>
+                    <div class="count" id="scanCount">${scanCount}</div>
+                </div>
+
+                <div class="qr-container">
+                    <div id="qrcode"></div>
+                </div>
+
+                <div class="url-display" id="urlDisplay"></div>
+
+                <button class="button" onclick="downloadQR()">📥 Download QR Code</button>
+                <button class="button" onclick="resetCount()">🔄 Reset Counter</button>
+                <button class="button secondary" onclick="showBigScreen()">📺 Big Screen Mode</button>
+
+                <div class="info">
+                    💡 <strong>How it works:</strong> Share the QR code. When scanned, users go directly to your destination page and the counter updates in real-time!
+                </div>
+            `;
+            generateQR();
+            displayCurrentURL();
+        }
+
+        // Show Big Screen Mode
+        function showBigScreen() {
+            document.getElementById('modeIndicator').textContent = '📺 Big Screen Mode';
+            const container = document.getElementById('mainContainer');
+            container.className = 'container big-screen';
+            container.innerHTML = `
+                <h1>🔍 Total Scans</h1>
+                <div class="count" id="scanCount">${scanCount}</div>
+                <p class="subtitle"><span class="status"></span>Real-time Counter</p>
+                <button class="button" onclick="showDashboard()" style="margin-top: 40px;">← Back to Dashboard</button>
+            `;
+        }
+
+        // Show Destination Page (when QR is scanned)
+        function showDestinationPage() {
+            document.getElementById('modeIndicator').textContent = '✓ Tracked Visit';
+            
+            // Increment the counter in Firebase
+            scanCountRef.transaction((currentCount) => {
+                return (currentCount || 0) + 1;
+            }).then(() => {
+                console.log('Scan tracked successfully!');
+            }).catch((error) => {
+                console.error('Error tracking scan:', error);
+            });
+
+            const container = document.getElementById('mainContainer');
+            container.className = 'container destination-page';
+            container.innerHTML = `
+                <h1>🎉 Welcome to Pansol!</h1>
+                
+                <div class="welcome-message">
+                    <p>Thank you for scanning our QR code! Your visit has been tracked.</p>
+                    <p>Replace this with your actual Pansol website content.</p>
+                </div>
+
+                <div class="badge">✓ Scan #${scanCount} Recorded</div>
+                
+                <button class="button" onclick="showDashboard()" style="margin-top: 30px;">View Dashboard</button>
+            `;
+        }
+
+        // Toggle Big Screen Mode
+        function toggleBigScreen() {
+            showBigScreen();
         }
 
         // Reset counter
@@ -299,31 +442,26 @@
             }
         }
 
-        // Toggle Big Screen Mode
-        function toggleBigScreen() {
-            isBigScreenMode = !isBigScreenMode;
-            const container = document.getElementById('mainContainer');
-            
-            if (isBigScreenMode) {
-                container.innerHTML = `
-                    <h1>🔍 Total Scans</h1>
-                    <div class="count" id="scanCount">${scanCount}</div>
-                    <p class="subtitle"><span class="status"></span>Real-time Counter</p>
-                    <button class="button" onclick="toggleBigScreen()" style="margin-top: 40px;">← Back to Dashboard</button>
-                `;
-                container.classList.add('big-screen');
-            } else {
-                location.reload();
+        // Display current URL
+        function displayCurrentURL() {
+            const urlDisplay = document.getElementById('urlDisplay');
+            if (urlDisplay) {
+                const currentURL = window.location.href.split('?')[0];
+                const destinationURL = currentURL + '?destination=true';
+                urlDisplay.textContent = destinationURL;
             }
         }
 
-        // Generate QR Code with tracking
+        // Generate QR Code
         function generateQR() {
             const qrElement = document.getElementById('qrcode');
+            if (!qrElement) return;
+            
             qrElement.innerHTML = '';
             
-            // Create tracking URL - when scanned, it will increment the counter
-            const trackingURL = window.location.href.split('?')[0] + '?scan=true';
+            // QR code points to this page with ?destination=true parameter
+            const currentURL = window.location.href.split('?')[0];
+            const trackingURL = currentURL + '?destination=true';
             
             new QRCode(qrElement, {
                 text: trackingURL,
@@ -347,18 +485,9 @@
             }
         }
 
-        // Check if this is a scan
-        async function checkForScan() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('scan') === 'true') {
-                await incrementCount();
-            }
-        }
-
         // Initialize
-        async function init() {
-            generateQR();
-            await checkForScan();
+        function init() {
+            detectMode();
         }
 
         init();
