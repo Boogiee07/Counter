@@ -617,7 +617,7 @@
                 <p class="subtitle"><span class="status"></span>${statusText}</p>
 
                 <div class="stats">
-                    <h2>Total Symposium Visitors</h2>
+                    <h2>Total Scans</h2>
                     <div class="count" id="scanCount">${scanCount}</div>
                 </div>
 
@@ -630,6 +630,17 @@
                 <button class="button" onclick="resetCount()">${resetButtonText}</button>
                 <button class="button secondary" onclick="showBigScreen()">📺 Big Screen Mode</button>
 
+                <div class="info">
+                    💡 <strong>How it works:</strong> 
+                    <ol style="text-align: left; margin: 10px 20px;">
+                        <li>User scans QR code</li>
+                        <li>Counter increments automatically (+1)</li>
+                        <li>User redirects to pansol.netlify.app</li>
+                    </ol>
+                    <p style="margin-top: 10px; font-size: 0.85em;">
+                        Current tracking URL: <code>${trackingUrl}</code>
+                    </p>
+                </div>
             `;
             
             updateConnectionStatus();
@@ -652,7 +663,8 @@
             const container = document.getElementById('mainContainer');
             container.className = 'container big-screen';
             container.innerHTML = `
-                <h1>🔍 Total Symposium Visitors</h1>
+                <img src="pansol.png" alt="Pansol Logo" style="max-width: 300px; width: 80%; margin-bottom: 30px; object-fit: contain;">
+                <h1>Total Scans</h1>
                 <div class="count" id="scanCount">${scanCount}</div>
                 <p class="subtitle"><span class="status"></span>Real-time Counter</p>
                 <button class="button" onclick="showDashboard()" style="margin-top: 40px;">← Back to Dashboard</button>
@@ -807,6 +819,3 @@
     </script>
 </body>
 </html>
-
-
-
