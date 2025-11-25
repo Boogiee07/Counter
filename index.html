@@ -446,9 +446,7 @@
         function displayCurrentURL() {
             const urlDisplay = document.getElementById('urlDisplay');
             if (urlDisplay) {
-                const currentURL = window.location.href.split('?')[0];
-                const destinationURL = currentURL + '?destination=true';
-                urlDisplay.textContent = destinationURL;
+                urlDisplay.textContent = 'http://pansol.netlify.app';
             }
         }
 
@@ -459,9 +457,8 @@
             
             qrElement.innerHTML = '';
             
-            // QR code points to this page with ?destination=true parameter
-            const currentURL = window.location.href.split('?')[0];
-            const trackingURL = currentURL + '?destination=true';
+            // QR code points directly to pansol.netlify.app
+            const trackingURL = 'http://pansol.netlify.app';
             
             new QRCode(qrElement, {
                 text: trackingURL,
